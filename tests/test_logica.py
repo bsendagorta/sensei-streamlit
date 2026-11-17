@@ -28,7 +28,7 @@ def test_parse_resultado():
 def test_formatear():
     assert formatear("1500m", 312) == "5:12"
     assert formatear("1500m", 312.5) == "5:12,5"
-    assert formatear("60m", 7.85) == "7,85 s"
+    assert formatear("60m", 7.85) == "7,85 s" and formatear("dominadas", 21) == "21 reps"
     assert formatear("dominadas", None) == "—"
 
 

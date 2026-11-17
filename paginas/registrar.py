@@ -2,10 +2,13 @@ import uuid
 
 import streamlit as st
 
+from sensei import ui
 from sensei.app_comun import ahora, datos, guardar, hoy
 from sensei.modelo import PRUEBAS, TIPOS_SESION, ZONAS_MOLESTIA, formatear, parse_resultado
 
-st.title("Registrar")
+ui.pagina("Check-in y sesiones", "registrar")
+ui.html('<div class="section-head"><div><h1>Cómo llegas hoy.</h1><p>El check-in de 20 s enseña a Sensei qué te afecta y '
+        'activa el semáforo. Las sesiones con esfuerzo percibido alimentan la carga.</p></div></div>')
 d = datos()
 t_check, t_ses, t_ctrl = st.tabs(["Check-in diario", "Sesión hecha", "Control / medición"])
 

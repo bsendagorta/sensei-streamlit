@@ -3,13 +3,19 @@ from __future__ import annotations
 
 import re
 
-PRUEBAS: dict[str, dict] = {
-    "dominadas": {"nombre": "Dominadas (30 s)", "unidad": "rep", "mejor": "mayor", "ayuda": "Repeticiones, p. ej. 14"},
-    "banca": {"nombre": "Press de banca 40 kg (30 s)", "unidad": "rep", "mejor": "mayor", "ayuda": "Repeticiones, p. ej. 28"},
-    "60m": {"nombre": "Velocidad 60 m", "unidad": "s", "mejor": "menor", "ayuda": "Segundos, p. ej. 7,85"},
-    "1500m": {"nombre": "Fondo 1500 m", "unidad": "min:s", "mejor": "menor", "ayuda": "min:s, p. ej. 5:12"},
-    "cuerda": {"nombre": "Trepa de cuerda 6 m", "unidad": "s", "mejor": "menor", "ayuda": "Segundos, p. ej. 6,4"},
-    "flexibilidad": {"nombre": "Flexibilidad", "unidad": "cm", "mejor": "mayor", "ayuda": "Centímetros, p. ej. 32"},
+PRUEBAS: dict[str, dict] = {  # mismo orden, nombres y protocolos que Sensei.app
+    "banca": {"nombre": "Press de banca", "protocolo": "30 segundos · 40 kg", "unidad": "rep", "mejor": "mayor",
+              "ayuda": "Repeticiones, p. ej. 35"},
+    "dominadas": {"nombre": "Dominadas", "protocolo": "Repeticiones válidas en 30 segundos", "unidad": "rep",
+                  "mejor": "mayor", "ayuda": "Repeticiones, p. ej. 21"},
+    "cuerda": {"nombre": "Trepa de cuerda", "protocolo": "6 metros de altura", "unidad": "s", "mejor": "menor",
+               "ayuda": "Segundos, p. ej. 5,9"},
+    "flexibilidad": {"nombre": "Flexibilidad", "protocolo": "Protocolo de la convocatoria", "unidad": "cm",
+                     "mejor": "mayor", "ayuda": "Centímetros, p. ej. 26"},
+    "60m": {"nombre": "Velocidad 60 m", "protocolo": "60 metros medidos · salida de examen", "unidad": "s",
+            "mejor": "menor", "ayuda": "Segundos, p. ej. 7,85"},
+    "1500m": {"nombre": "Fondo 1500 m", "protocolo": "1500 metros continuos", "unidad": "min:s", "mejor": "menor",
+              "ayuda": "min:s, p. ej. 5:34"},
 }
 
 ZONAS_MOLESTIA = [
@@ -61,12 +67,31 @@ def formatear(prueba: str, valor) -> str:
         seg = f"{int(s):02d}" if s == int(s) else f"{s:04.1f}".replace(".", ",")
         return f"{int(m)}:{seg}"
     if u == "rep":
-        return f"{int(round(valor))} rep"
+        return f"{int(round(valor))} reps"
     if u == "s":
-        return f"{valor:.2f} s".replace(".", ",")
-    return f"{valor:g} cm".replace(".", ",")
+        return f"{round(valor, 2):g} s".replace(".", ",")
+    return f"{round(valor, 1):g} cm".replace(".", ",")
 
 
 def es_mejor(prueba: str, a: float, b: float) -> bool:
     """¿a es mejor marca que b?"""
     return a > b if PRUEBAS[prueba]["mejor"] == "mayor" else a < b
+
+
+def formatear_marca(prueba: str, valor, con_unidad: bool = True) -> str:
+    """Como mark() de Sensei: 1500 en m:ss sin decimales, segundos con 1 decimal, reps enteras."""
+    if valor is None:
+        return "—"
+    u = PRUEBAS[prueba]["unidad"]
+    if u == "min:s":
+        m, s = divmod(round(float(valor)), 60)
+        return f"{m}:{s:02d}" + (" min:s" if con_unidad else "")
+    if u == "rep":
+        return f"{round(valor)}" + (" reps" if con_unidad else "")
+    txt = f"{round(float(valor), 1):g}".replace(".", ",")
+    return txt + ((" s" if u == "s" else " cm") if con_unidad else "")
+
+
+def formatear_rango(prueba: str, a, b) -> str:
+    lo, hi = sorted([a, b])
+    return f"{formatear_marca(prueba, lo, False)}–{formatear_marca(prueba, hi)}"

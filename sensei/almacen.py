@@ -23,7 +23,7 @@ SCHEMA = "sensei-streamlit-v1"
 
 def datos_vacios() -> dict:
     return {"schema": SCHEMA, "ajustes": {}, "checkins": [], "sesiones": [], "controles": [],
-            "comidas": [], "dias_nutricion_completos": [], "garmin_diario": [],
+            "comidas": [], "dias_nutricion_completos": [], "dias_nutricion": {}, "citas": [], "garmin_diario": [],
             "garmin_actividades": [], "garmin_ultima_sync": None}
 
 
@@ -91,6 +91,10 @@ class AlmacenGitHub:
                                f"de contenidos en {self.repo} y que no haya caducado.")
         r.raise_for_status()
         j = r.json()
+        if j.get("encoding") == "none" or not j.get("content"):  # > 1 MB: la API de contenidos no lo incluye
+            b = self.s.get(f"https://api.github.com/repos/{self.repo}/git/blobs/{j['sha']}", timeout=60)
+            b.raise_for_status()
+            return base64.b64decode(b.json()["content"]).decode("utf-8"), j["sha"]
         return base64.b64decode(j["content"]).decode("utf-8"), j["sha"]
 
     def _put(self, ruta, texto, sha, mensaje):
@@ -98,7 +102,7 @@ class AlmacenGitHub:
                 "content": base64.b64encode(texto.encode("utf-8")).decode()}
         if sha:
             body["sha"] = sha
-        r = self.s.put(self._url(ruta), json=body, timeout=30)
+        r = self.s.put(self._url(ruta), json=body, timeout=90)
         if r.status_code in (409, 422) and "sha" in r.text:
             return False
         if r.status_code in (401, 403, 404):
@@ -127,7 +131,7 @@ class AlmacenGitHub:
             d = datos_vacios() if texto is None else normalizar(json.loads(texto))
             cambio(d)
             normalizar(d)
-            if self._put(self.ruta, json.dumps(d, ensure_ascii=False, indent=1), sha, mensaje):
+            if self._put(self.ruta, json.dumps(d, ensure_ascii=False, separators=(",", ":")), sha, mensaje):
                 return d
             time.sleep(1)
         raise ErrorAlmacen("Otro dispositivo estaba guardando a la vez y no se pudo guardar. Vuelve a intentarlo.")

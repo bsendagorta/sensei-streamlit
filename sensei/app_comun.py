@@ -58,7 +58,11 @@ def exigir_acceso() -> None:
         return
     if st.session_state.get("acceso_ok"):
         return
-    st.title("Sensei")
+    from .ui import _css
+    st.html(f"<style>{_css()}</style>")
+    st.markdown('<div class="sensei"><div class="eyebrow" style="margin-top:40px">Sensei · preparación física</div>'
+                '<div class="section-head" style="margin-top:10px"><div><h1>Sensei</h1><p>Entra con tu contraseña.</p>'
+                '</div></div></div>', unsafe_allow_html=True)
     with st.form("acceso"):
         intento = st.text_input("Contraseña", type="password")
         if st.form_submit_button("Entrar", type="primary"):
@@ -98,7 +102,8 @@ def ajustes() -> dict:
     a = dict(datos().get("ajustes") or {})
     a.setdefault("fecha_examen", EXAMEN_POR_DEFECTO.isoformat())
     a.setdefault("lugar", {"nombre": "Madrid", "lat": 40.4168, "lon": -3.7038})
-    a.setdefault("peso_kg", None)
+    if a.get("peso_kg") is None:
+        a["peso_kg"] = 92.0  # valor por defecto de Sensei.app; cámbialo en Nutrición o Ajustes
     a.setdefault("puntos_max", 6)
     a.setdefault("baremo", {})
     a["umbrales"] = {**UMBRALES_POR_DEFECTO, **(a.get("umbrales") or {})}
@@ -222,3 +227,39 @@ def estilo_grafico(fig, titulo_y: str = ""):
     fig.update_yaxes(gridcolor="rgba(128,128,128,0.15)")
     fig.update_traces(line=dict(width=2, color=AZUL), marker=dict(size=8, color=AZUL))
     return fig
+
+
+# ---------------- Nutrición (mismas reglas que Nutrition.js de Sensei.app) ----------------
+
+CARGAS_DIA = {"light": "Descanso / suave", "moderate": "Moderada · ~1 h", "endurance": "Resistencia · 1–3 h"}
+HC_POR_CARGA = {"light": (3, 5), "moderate": (5, 7), "endurance": (6, 10)}
+PROTEINA_GKG = (1.4, 2.0)
+COMIDAS = ["Desayuno", "Media mañana", "Comida", "Merienda", "Cena", "Otros"]
+
+
+def dia_nutricion(d: dict, fecha: str) -> dict:
+    info = (d.get("dias_nutricion") or {}).get(fecha) or {}
+    return {"carga": info.get("carga", "light"), "completo": fecha in d.get("dias_nutricion_completos", [])}
+
+
+def totales(entradas: list[dict]) -> dict:
+    out = {"n": len(entradas)}
+    for k in ("kcal", "prot", "hc", "grasa"):
+        conocidos = [e[k] for e in entradas if e.get(k) is not None]
+        out[k] = sum(conocidos) if conocidos else None
+        out[k + "_conocidos"] = len(conocidos)
+    return out
+
+
+def estado_nutricion(fecha) -> str:
+    d, f = datos(), str(fecha)
+    entradas = [c for c in d["comidas"] if c["fecha"] == f]
+    t, dia, peso = totales(entradas), dia_nutricion(d, f), ajustes()["peso_kg"]
+    if not t["n"]:
+        return "Sin comidas registradas"
+    if not dia["completo"]:
+        return "Registro en curso"
+    if any(t[k + "_conocidos"] != t["n"] for k in ("kcal", "prot", "hc", "grasa")):
+        return "Registro incompleto"
+    hc_min = peso * HC_POR_CARGA[dia["carga"]][0]
+    return "Referencias cubiertas" if t["prot"] >= peso * 1.4 and t["hc"] >= hc_min else "Revisar aporte"
