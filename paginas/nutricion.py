@@ -67,7 +67,7 @@ with st.container(key="panel_nutri"):
     t1, t2, t3, t4 = st.columns([1.2, 1.2, 1, 1.2], vertical_alignment="bottom")
     fecha = t1.date_input("Día del registro", h, max_value=h, format="DD/MM/YYYY").isoformat()
     dia = dia_nutricion(d, fecha)
-    carga = t2.selectbox("Carga del día", list(CARGAS_DIA), index=list(CARGAS_DIA).index(dia["carga"]),
+    carga = t2.selectbox("Carga del día" + (" (deducida de Garmin)" if dia["carga_auto"] else ""), list(CARGAS_DIA), index=list(CARGAS_DIA).index(dia["carga"]),
                          format_func=CARGAS_DIA.get)
     peso = t3.number_input("Peso actual (kg)", 30.0, 250.0, float(a["peso_kg"]), 0.5)
     completo = t4.checkbox("He registrado todo el día", value=dia["completo"])

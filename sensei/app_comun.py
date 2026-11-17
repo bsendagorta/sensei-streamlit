@@ -238,8 +238,12 @@ COMIDAS = ["Desayuno", "Media mañana", "Comida", "Merienda", "Cena", "Otros"]
 
 
 def dia_nutricion(d: dict, fecha: str) -> dict:
+    """La carga del día la eliges tú; si no, se deduce de lo que Garmin registró ese día."""
+    from .evaluacion import carga_auto_dia
     info = (d.get("dias_nutricion") or {}).get(fecha) or {}
-    return {"carga": info.get("carga", "light"), "completo": fecha in d.get("dias_nutricion_completos", [])}
+    manual = info.get("carga")
+    return {"carga": manual or carga_auto_dia(d, fecha), "carga_auto": manual is None,
+            "completo": fecha in d.get("dias_nutricion_completos", [])}
 
 
 def totales(entradas: list[dict]) -> dict:
@@ -263,3 +267,37 @@ def estado_nutricion(fecha) -> str:
         return "Registro incompleto"
     hc_min = peso * HC_POR_CARGA[dia["carga"]][0]
     return "Referencias cubiertas" if t["prot"] >= peso * 1.4 and t["hc"] >= hc_min else "Revisar aporte"
+
+
+# ---------------- Aprendizaje compartido entre páginas (se recalcula cuando cambian tus datos) ----------------
+
+@st.cache_data(show_spinner=False, max_entries=4)
+def _aprender(clave: str, texto: str, dia: str):
+    import json
+    from .aprendizaje import recuperacion_personal
+    from .conocerte import resumen_aprendizaje
+    d = json.loads(texto)
+    R = resumen_aprendizaje(d, date.fromisoformat(dia))
+    R["recuperacion"] = recuperacion_personal(d)
+    return R
+
+
+def aprendizaje() -> dict:
+    import json
+    d = datos()
+    clave = (f'{len(d["garmin_diario"])}-{len(d["garmin_actividades"])}-{d.get("garmin_ultima_sync")}-'
+             f'{len(d["checkins"])}-{len(d["sesiones"])}')
+    texto = json.dumps({k: d[k] for k in ("garmin_diario", "garmin_actividades", "sesiones", "checkins")})
+    with st.spinner("Sensei está aprendiendo de tus datos…"):
+        return _aprender(clave, texto, hoy().isoformat())
+
+
+def evaluacion_y_recomendacion() -> tuple[dict, dict]:
+    from .evaluacion import evaluar_hoy, recomendar_manana
+    d, a, h = datos(), ajustes(), hoy()
+    R = aprendizaje()
+    f = h.isoformat()
+    nut = {"totales": totales([c for c in d["comidas"] if c["fecha"] == f]), "carga": dia_nutricion(d, f)["carga"]}
+    ev = evaluar_hoy(d, h, R["modelos"], a["peso_kg"], nut)
+    rec = recomendar_manana(d, h, R["modelos"], a, R.get("recuperacion"), fecha_examen())
+    return ev, rec

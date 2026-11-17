@@ -3,7 +3,8 @@ from datetime import timedelta
 import streamlit as st
 
 from sensei import apis, ui
-from sensei.app_comun import ajustes, autosincronizar, datos, fecha_examen, hoy
+from sensei.app_comun import ajustes, autosincronizar, datos, evaluacion_y_recomendacion, fecha_examen, hoy
+from sensei.paneles import panel_hoy, panel_recomendacion
 from sensei.baremo import baremo, calificar, num
 from sensei.carga import acwr, carga_diaria_garmin
 from sensei.graficos import linea
@@ -91,6 +92,9 @@ H(f'''<section class="panel body-dashboard" style="margin-top:4px"><div class="b
     f"<li>{ui.ESTADO_ICONO[s.nivel]} <b>{esc(s.nombre)}</b> — {esc(s.texto)}</li>" for s in r["senales"])}</ul>
 {f'<p class="hint" style="margin-top:10px">{esc(r["motivo_extra"])}</p>' if r["motivo_extra"] else ""}</details>
 <p class="body-footnote">{esc(fase(h, examen))} {"Molestia repetida en " + esc(", ".join(r["zonas_fisio"])) + ": consulta con fisio." if r["zonas_fisio"] else ""}</p></section>''')
+
+ev, rec = evaluacion_y_recomendacion()
+H(f'<div class="lower-grid">{panel_recomendacion(rec, grande=False)}{panel_hoy(ev, h)}</div>')
 
 if not any(c["fecha"] == h.isoformat() for c in d["checkins"]):
     st.page_link("paginas/registrar.py", label="Hacer el check-in de hoy (20 s): sensación y molestias", icon="✍️")

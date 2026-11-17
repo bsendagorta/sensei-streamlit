@@ -1,76 +1,87 @@
-import json
-
 import streamlit as st
 
 from sensei import ui
-from sensei.app_comun import datos, guardar, hoy
+from sensei.app_comun import aprendizaje, datos, evaluacion_y_recomendacion, guardar, hoy
 from sensei.aprendizaje import modelo_sensacion, predecir_sensacion
 from sensei.baremo import num
-from sensei.conocerte import OBJETIVOS, TIPOS, resumen_aprendizaje, simular
+from sensei.conocerte import OBJETIVOS, TIPOS, frases, simular
 from sensei.graficos import linea
+from sensei.paneles import panel_hoy, panel_recomendacion
 
 ui.pagina("Sensei te conoce", "conoce")
 d, h = datos(), hoy()
 esc, H = ui.esc, ui.html
 
-
-@st.cache_data(show_spinner=False, max_entries=4)
-def _aprender(clave: str, texto: str, dia: str):
-    return resumen_aprendizaje(json.loads(texto), h)
-
-
-clave = f'{len(d["garmin_diario"])}-{len(d["garmin_actividades"])}-{d.get("garmin_ultima_sync")}-{len(d["checkins"])}'
-with st.spinner("Reentrenando con tus datos…"):
-    R = _aprender(clave, json.dumps({k: d[k] for k in ("garmin_diario", "garmin_actividades")}), h.isoformat())
+R = aprendizaje()
 M = R["modelos"]
-validos = [m for m in M.values() if m.get("ok")]
-utiles = [m for m in validos if m["util"]]
+ev, rec = evaluacion_y_recomendacion()
+utiles = [m for m in M.values() if m.get("ok") and m["util"]]
 
-# Historial del aprendizaje: una foto al día para ver si mejora con el tiempo
-foto = {"fecha": h.isoformat(), "dias": R["filas"], **{o: round(m["mae"], 2) for o, m in M.items() if m.get("ok")}}
-historial = d.get("aprendizaje_historial", [])
-if validos and (not historial or historial[-1]["fecha"] != foto["fecha"]):
-    guardar(lambda x: x.setdefault("aprendizaje_historial", []).append(foto), "Aprendizaje: foto diaria")
-    historial = d.get("aprendizaje_historial", [])
+# Foto diaria del acierto, para ver con el tiempo si de verdad mejora
+if utiles:
+    foto = {"fecha": h.isoformat(), "dias": R["filas"], **{o: round(m["mae"], 2) for o, m in M.items() if m.get("ok")}}
+    hist = d.get("aprendizaje_historial", [])
+    if not hist or hist[-1]["fecha"] != foto["fecha"]:
+        guardar(lambda x: x.setdefault("aprendizaje_historial", []).append(foto), "Aprendizaje: foto diaria")
 
-mejora_media = sum(m["mejora_pct"] for m in utiles) / len(utiles) if utiles else 0
 H(f'''<div id="view-overview"><section class="hero"><div><div class="eyebrow">Tu modelo personal</div><h1>Sensei te conoce</h1>
-<p style="margin-top:8px">Aprendido de {R["filas"]} días de Garmin y {len(d["garmin_actividades"])} actividades tuyas. Se reentrena
-cada vez que entra un dato nuevo y solo usa lo que acierta mejor que no tener modelo.</p></div>
-<div class="exam-box"><div class="days">{len(utiles)}/{len(OBJETIVOS)}</div><div class="days-label">modelos que ya te
-predicen mejor que tu media</div><small>{"+" + num(mejora_media, 0) + " % de acierto medio" if utiles else "Aún aprendiendo"}</small></div></section></div>''')
+<p style="margin-top:8px">Ha aprendido de {R["filas"]} días de Garmin y {len(d["garmin_actividades"])} actividades tuyas, y se
+reentrena solo con cada dato nuevo. Arriba, lo que debes hacer; abajo, lo que sabe de ti.</p></div>
+<div class="exam-box"><div class="days">{len(utiles)}/{len(OBJETIVOS)}</div><div class="days-label">predicciones que ya
+aciertan más que tu media</div></div></section></div>''')
 
-# ---------------------------------------------------------------- simulador
-H('<div class="section-head" style="margin-top:27px"><div><h2>Mañana, si hoy…</h2><p>Elige qué piensas hacer hoy y '
-  'Sensei calcula cómo amanecerás mañana según lo que ha aprendido de ti. La carga de cada tipo sale de la mediana de tus '
-  'propias sesiones.</p></div></div>')
+# 1. Lo que importa: qué hacer mañana y cómo ha ido hoy
+H(f'<div class="lower-grid">{panel_recomendacion(rec)}{panel_hoy(ev, h)}</div>')
+
+# 2. Lo que sabe de ti, en frases
+lista = frases(R, R.get("recuperacion"))
+if lista:
+    H('<div class="section-head" style="margin-top:27px"><div><h2>Lo que sé de ti</h2><p>Conclusiones sacadas de tus datos. '
+      'Las marcadas «se está confirmando» tienen aún pocos casos.</p></div></div><section class="panel">'
+      + "".join(f'<div class="next-step"><span style="font-size:20px">{f["icono"]}</span><div><strong style="font-size:14px;'
+                f'font-weight:500;line-height:1.6">{esc(f["texto"])}</strong><p>{"Demostrado" if f["solida"] else "Se está confirmando"}'
+                f'{" · " + str(f["n"]) + " casos" if f.get("n") else ""}</p></div></div>' for f in lista) + '</section>')
+
+# 3. Probar otras opciones
+H('<div class="section-head" style="margin-top:27px"><div><h2>¿Y si mañana hago otra cosa?</h2><p>Elige un plan y mira cómo '
+  'amanecerías pasado mañana según lo que he aprendido de ti.</p></div></div>')
 c1, c2 = st.columns([1.3, 2])
 opciones = {"descanso": "Descanso"} | {k: v for k, v in TIPOS.items() if k in R["tasa"]}
-tipo = c1.selectbox("Hoy voy a hacer", list(opciones), format_func=opciones.get)
+tipo = c1.selectbox("Si mañana hago…", list(opciones), format_func=opciones.get)
 minutos = c2.slider("Minutos", 10, 120, 50, 5, disabled=tipo == "descanso")
 sim = simular(d, M, h, None if tipo == "descanso" else tipo, minutos)
 desc = simular(d, M, h, None, 0)
-if not sim:
-    H('<p class="info-note">Necesito la lectura de Garmin de hoy para simular mañana. Pulsa «Actualizar Garmin».</p>')
-else:
+if sim:
     tarjetas = []
     for obj, (nombre, unidad, alto_mejor) in OBJETIVOS.items():
         p = sim.get(obj)
-        if not p:
+        if not p or p["abs"] is None:
             continue
-        frente = p["dif"] - desc[obj]["dif"] if obj in desc else 0
-        malo = (p["dif"] < -2) if alto_mejor else (p["dif"] > 1)
-        cls = "alert" if malo and abs(p["dif"]) > (8 if unidad == "/100" else 3) else "watch" if malo else "good"
-        tarjetas.append(f'<div class="insight-card {cls}"><small>{esc(nombre)}</small><strong>{num(p["abs"], 0)} '
-                        f'{esc(unidad)}</strong><small>{"+" if p["dif"] >= 0 else ""}{num(p["dif"], 1)} frente a tu media</small>'
-                        f'<small class="insight-note">{"" if tipo == "descanso" else ("+" if frente >= 0 else "") + num(frente, 1) + " frente a descansar"}</small></div>')
-    m_ok = [M[o] for o in sim]
-    err = " · ".join(f'{OBJETIVOS[o][0].split(" de ")[0]} ±{num(M[o]["mae"], 0)}' for o in sim)
-    H(f'<section class="panel"><div class="insight-grid">{"".join(tarjetas)}</div><p class="hint" style="margin-top:14px">'
-      f'Error medio de cada predicción (validado día a día con tu pasado): {esc(err)}. Es una estimación, no una '
-      f'garantía; un control real o el semáforo de mañana mandan.</p></section>')
+        frente = p["dif"] - desc[obj]["dif"]
+        peor = (frente < -1) if alto_mejor else (frente > 0.5)
+        cls = "alert" if peor and abs(frente) > (10 if unidad == "/100" else 3) else "watch" if peor else "good"
+        tarjetas.append(f'<div class="insight-card {cls}"><small>{esc(nombre.replace(" de mañana", "").replace(" mañana", ""))}'
+                        f'</small><strong>{num(p["abs"], 0)} {esc(unidad)}</strong><small class="insight-note">'
+                        f'{"igual que descansando" if tipo == "descanso" or abs(frente) < 0.5 else ("+" if frente > 0 else "") + num(frente, 0) + " frente a descansar"}'
+                        f'</small></div>')
+    H(f'<section class="panel"><div class="insight-grid">{"".join(tarjetas)}</div><p class="subtle" style="margin-top:12px">'
+      f'Estimación con margen de error (± a la derecha en los detalles). El semáforo de cada mañana manda.</p></section>')
+else:
+    H('<p class="info-note">Necesito la lectura de Garmin de hoy para simular. Pulsa «Actualizar Garmin».</p>')
 
-# ---------------------------------------------------------------- respuesta por tipo
+# 4. Lo que solo tú le puedes enseñar
+ms = modelo_sensacion(d)
+if ms["ok"]:
+    pred = predecir_sensacion(ms, d, h)
+    txt = (f'Con {ms["n"]} check-ins predice tu sensación con un error de {num(ms["mae"])} puntos (sin modelo '
+           f'{num(ms["mae_ref"])}).' + (f' Hoy esperaría un {num(pred)}/10.' if pred else ""))
+else:
+    txt = (f'{ms["motivo"]} Cada check-in de 20 s (sensación y molestias) le enseña cómo te sientes tú, no solo lo que '
+           'mide el reloj, y evita recomendarte series con una molestia.')
+H(f'<section class="panel" style="margin-top:23px"><h2>Lo que solo tú le puedes enseñar</h2><p>{esc(txt)}</p></section>')
+st.page_link("paginas/registrar.py", label="Hacer el check-in de hoy", icon="✍️")
+
+# 5. Detalles técnicos, plegados
 filas = []
 for r in R["respuesta"]:
     def celda(obj, dia, unidad, alto_mejor=True):
@@ -85,62 +96,25 @@ for r in R["respuesta"]:
     filas.append(f'<tr><td><strong>{esc(r["nombre"])}</strong><br><small style="color:#6c7a72">{r["n"]} días</small></td>'
                  f'{celda("vfc", "d1", "ms")}{celda("vfc", "d2", "ms")}{celda("fc_reposo", "d1", "lpm", False)}'
                  f'{celda("fc_reposo", "d2", "lpm", False)}{celda("disposicion", "d1", "")}</tr>')
-H(f'''<section class="panel" style="margin-top:23px"><div class="panel-head"><div><h2>Cómo te afecta cada entrenamiento</h2>
-<p>Cómo amaneces, respecto a tu media de 28 días, la mañana siguiente (D+1) y a los dos días (D+2) según el tipo de sesión
-principal del día. En color solo lo que tus datos demuestran (IC 95 % sin cruzar el cero); en gris, lo que aún no.</p></div></div>
-<div class="table-scroll"><table><thead><tr><th>Tipo de día</th><th>VFC D+1</th><th>VFC D+2</th><th>Pulso reposo D+1</th>
-<th>Pulso reposo D+2</th><th>Disposición D+1</th></tr></thead><tbody>{"".join(filas)}</tbody></table></div></section>''')
-
-# ---------------------------------------------------------------- qué te mueve
-paneles = []
+efectos = []
 for obj, (nombre, unidad, alto_mejor) in OBJETIVOS.items():
     m = M[obj]
     if not m.get("ok"):
-        paneles.append(f'<section class="panel"><h3>{esc(nombre)}</h3><p>{esc(m["motivo"])}</p></section>')
         continue
-    lineas = []
-    for e in m["efectos"][:5]:
-        bueno = (e["efecto"] > 0) == alto_mejor
-        poca = e.get("n_sesiones") is not None and e["n_sesiones"] < 10
-        paso = "" if e["variable"].startswith("carga_") and e["n_sesiones"] and "típica" in e["nombre"] else \
-            f' (por cada {num(e["paso"], 0)})'
-        lineas.append(f'<div class="evidence"><span>{esc(e["nombre"])}{esc(paso)}'
-                      f'{"<br><small>poca evidencia: " + str(e["n_sesiones"]) + " sesiones</small>" if poca else ""}</span>'
-                      f'<strong style="color:{"#315f4d" if bueno else "#a14436"}">{"+" if e["efecto"] >= 0 else ""}'
-                      f'{num(e["efecto"], 1)} {esc(unidad)}</strong></div>')
-    estado = (f'<span class="badge green">Acierta un {num(m["mejora_pct"], 0)} % más</span>' if m["util"]
-              else '<span class="badge">Aún no bate a tu media</span>')
-    paneles.append(f'<section class="panel"><div class="panel-head"><h3>{esc(nombre)}</h3>{estado}</div>'
-                   f'<p>Lo que más lo mueve, según {m["n"]} días tuyos:</p>{"".join(lineas)}</section>')
-H(f'<div class="section-head" style="margin-top:27px"><div><h2>Qué mueve tu recuperación</h2><p>Efecto de cada cosa '
-  f'manteniendo las demás igual. Es asociación aprendida de tus datos, no una ley fisiológica.</p></div></div>'
-  f'<div class="dashboard-grid" style="margin-top:0">{"".join(paneles)}</div>')
-
-# ---------------------------------------------------------------- ¿aprende de verdad?
-bloques = []
-for obj, (nombre, unidad, _) in OBJETIVOS.items():
-    m = M[obj]
-    if not m.get("ok") or len(m["curva"]) < 2:
-        continue
-    c = m["curva"]
-    svg = linea([x["mae"] for x in c], [x["periodo"] for x in c], unidad, media=[x["ref"] for x in c])
-    bloques.append(f'<section class="panel"><h3>{esc(nombre)}</h3><p>Error medio del modelo (línea) frente a no tener modelo '
-                   f'(puntos), por trimestre. Más bajo = mejor.</p><div class="chart">{svg}</div><p class="hint">Validado en '
-                   f'{m["n_validados"]} días: error {num(m["mae"], 1)} {esc(unidad)} frente a {num(min(m["mae_media"], m["mae_persistencia"]), 1)} '
-                   f'sin modelo.</p></section>')
-if bloques:
-    H(f'<div class="section-head" style="margin-top:27px"><div><h2>¿Aprende de verdad?</h2><p>Cada día se entrena solo con el '
-      f'pasado y se comprueba con el día siguiente, sin trampas. Si deja de acertar más que tu media, lo verás aquí.</p>'
-      f'</div></div><div class="dashboard-grid" style="margin-top:0">{"".join(bloques)}</div>')
-
-# ---------------------------------------------------------------- check-ins
-ms = modelo_sensacion(d)
-if ms["ok"]:
-    pred = predecir_sensacion(ms, d, h)
-    txt = (f'Con {ms["n"]} check-ins predice tu sensación con un error de {num(ms["mae"])} puntos (sin modelo '
-           f'{num(ms["mae_ref"])}).' + (f' Hoy esperaría un {num(pred)}/10.' if pred else ""))
-else:
-    txt = f'{ms["motivo"]} Cada check-in (sensación y molestias, 20 s) le enseña cómo te sientes tú, no solo lo que mide el reloj.'
-H(f'<section class="panel" style="margin-top:23px"><h2>Lo que solo tú le puedes enseñar</h2><p>{esc(txt)}</p></section>')
-st.page_link("paginas/registrar.py", label="Hacer el check-in de hoy", icon="✍️")
+    lin = "".join(f'<div class="evidence"><span>{esc(e["nombre"])}</span><strong style="color:'
+                  f'{"#315f4d" if (e["efecto"] > 0) == alto_mejor else "#a14436"}">{"+" if e["efecto"] >= 0 else ""}'
+                  f'{num(e["efecto"], 1)} {esc(unidad)}</strong></div>' for e in m["efectos"][:5])
+    curva = ""
+    if len(m["curva"]) >= 2:
+        curva = (f'<div class="chart">{linea([x["mae"] for x in m["curva"]], [x["periodo"] for x in m["curva"]], unidad, media=[x["ref"] for x in m["curva"]])}'
+                 f'</div><p class="subtle">Error por trimestre: modelo (línea) frente a no tener modelo (puntos).</p>')
+    efectos.append(f'<section class="panel"><div class="panel-head"><h3>{esc(nombre)}</h3><span class="badge '
+                   f'{"green" if m["util"] else ""}">±{num(m["mae"], 1)} · {"+" if m["mejora_pct"] >= 0 else ""}{num(m["mejora_pct"], 0)} %</span></div>'
+                   f'<p>Validado en {m["n_validados"]} días.</p>{lin}{curva}</section>')
+H(f'''<details class="projection-how" style="margin-top:27px"><summary>Ver los detalles del modelo</summary>
+<section class="panel" style="margin-top:14px"><h3>Cómo amaneces tras cada tipo de día</h3><p>Respecto a tu media de 28 días, al
+día siguiente (D+1) y a los dos días (D+2). En color, lo demostrado (IC 95 %); en gris, lo que aún no.</p><div class="table-scroll">
+<table><thead><tr><th>Tipo de día</th><th>VFC D+1</th><th>VFC D+2</th><th>Pulso D+1</th><th>Pulso D+2</th><th>Disposición D+1</th>
+</tr></thead><tbody>{"".join(filas)}</tbody></table></div></section>
+<div class="dashboard-grid">{"".join(efectos)}</div></details>''')
 ui.pie()

@@ -268,3 +268,52 @@ def resumen_aprendizaje(d: dict, hoy: date) -> dict:
     modelos = {obj: modelo(d, obj, filas=filas) for obj in OBJETIVOS}
     return {"filas": len(filas), "modelos": modelos, "respuesta": respuesta_por_tipo(d, filas),
             "hoy": fila_hoy(d, hoy), "tasa": carga_tipica(d)}
+
+
+def frases(R: dict, recuperacion: dict | None = None) -> list[dict]:
+    """Lo que Sensei sabe de ti, en frases cortas. Cada una lleva su evidencia (n) y si está demostrada."""
+    out = []
+    M = R["modelos"]
+    md = M.get("disposicion", {})
+    ref = md if md.get("ok") else M.get("vfc", {})
+    if ref.get("ok"):
+        unidad = "puntos de disposición" if ref is md else "ms de VFC"
+        tipos = [e for e in ref["efectos"] if e["variable"].startswith("carga_") and e["variable"] not in ("carga_7d", "carga_ayer")
+                 and (e.get("n_sesiones") or 0) >= 5]
+        if len(tipos) >= 2:
+            peor = min(tipos, key=lambda e: e["efecto"])
+            mejor = max(tipos, key=lambda e: e["efecto"])
+            art = {"carga_fuerza": "la fuerza", "carga_carrera": "la carrera continua", "carga_series": "las series y la pista",
+                   "carga_otro": "las demás actividades (bici, caminar…)"}
+            out.append({"icono": "🏋️", "texto": f"Lo que más te cuesta recuperar es {art[peor['variable']]}: una sesión típica tuya "
+                        f"te quita unos {abs(peor['efecto']):.0f} {unidad} al día siguiente. Lo que menos, "
+                        f"{art[mejor['variable']]} ({mejor['efecto']:+.0f}).", "n": peor.get("n_sesiones"),
+                        "solida": (peor.get("n_sesiones") or 0) >= 10})
+        est = next((e for e in ref["efectos"] if e["variable"] == "estres_hoy"), None)
+        if est and abs(est["efecto"]) >= 1:
+            out.append({"icono": "🧠", "texto": f"El estrés también entrena: 10 puntos más de estrés medio en Garmin te restan "
+                        f"unos {abs(est['efecto']):.0f} {unidad} al día siguiente. Un día de mucho estrés cuenta como carga.",
+                        "n": ref["n"], "solida": True})
+        sue = next((e for e in ref["efectos"] if e["variable"] == "sueno_hoy"), None)
+        if sue and abs(sue["efecto"]) >= 1:
+            out.append({"icono": "😴", "texto": f"Cada hora extra de sueño se nota: {sue['efecto']:+.0f} {unidad} a la mañana siguiente.",
+                        "n": ref["n"], "solida": True})
+    if recuperacion and recuperacion.get("ok"):
+        n = recuperacion["dias_hasta_normal"]
+        out.append({"icono": "🔁", "texto": (f"Tras tus sesiones más duras vuelves a tu normalidad en {n} día(s): deja "
+                    f"{n - 1} día(s) suave(s) entre dos sesiones duras." if n and n > 1 else
+                    "Recuperas rápido: al día siguiente de una sesión dura ya estás en tu normalidad." if n == 1 else
+                    "A los 3 días de una sesión dura aún no vuelves a tu normalidad: espacia más lo duro."),
+                    "n": recuperacion["n_duros"], "solida": recuperacion["n_duros"] >= 10})
+    for r in R.get("respuesta", []):
+        v = r.get("fc_reposo_d1")
+        if r["tipo"] != "descanso" and v and v["media"] > v["ic"] and v["media"] >= 1:
+            out.append({"icono": "❤️", "texto": f"Tras {r['nombre'].lower()} amaneces con el pulso {v['media']:.0f} lpm más "
+                        f"alto de lo normal.", "n": v["n"], "solida": v["n"] >= 10})
+    utiles = [(o, m) for o, m in M.items() if m.get("ok") and m["util"]]
+    if utiles:
+        o, m = max(utiles, key=lambda x: x[1]["mejora_pct"])
+        out.append({"icono": "🎯", "texto": f"Ya te conozco lo bastante para predecir tu {OBJETIVOS[o][0].lower()} con un error "
+                    f"de ±{m['mae']:.0f} {OBJETIVOS[o][1].replace('/100', 'puntos')}, un {m['mejora_pct']:.0f} % mejor que si no te "
+                    f"conociera. Cada día nuevo lo afina.", "n": m["n_validados"], "solida": True})
+    return out

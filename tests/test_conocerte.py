@@ -54,3 +54,15 @@ def test_simular_series_peor_que_descanso():
 
 def test_pocos_datos_no_inventa():
     assert not modelo(_datos(n=30), "vfc")["ok"]
+
+
+def test_recomendacion_respeta_recuperacion_y_molestias():
+    from sensei.evaluacion import recomendar_manana
+    d = _datos()
+    ms = {"vfc": modelo(d, "vfc")}
+    rec = recomendar_manana(d, HOY, ms, {})
+    assert rec["recomendacion"]["pasos"]
+    d["checkins"].append({"fecha": HOY.isoformat(), "sensacion": 5,
+                          "molestias": [{"zona": "Rodilla izq.", "intensidad": 5}]})
+    rec2 = recomendar_manana(d, HOY, ms, {})
+    assert rec2["recomendacion"]["clave"] not in ("series_1500", "velocidad", "carrera_suave")
