@@ -54,10 +54,13 @@ try:
     for col, x in zip(cols, mejores):
         with col:
             st.metric(x["hora"].strftime("%a %H:%M"), f"{x['sensacion']:.0f} °C",
-                      help=f"Temperatura {x['temp']:.0f} °C · lluvia {x['lluvia']} % · viento {x['viento']:.0f} km/h"
+                      help=f"Temperatura {x['temp']:.0f} °C · lluvia {x['lluvia'] if x['lluvia'] is not None else '—'} % · "
+                           f"viento {x['viento'] or 0:.0f} km/h"
                            + (f" · ICA {x['aqi']:.0f}" if x.get("aqi") is not None else ""))
             st.caption(", ".join(x["avisos"]) or "buenas condiciones")
-    st.caption(f"{lugar['nombre']} · Open-Meteo (sensación térmica, lluvia, viento y calidad del aire).")
+    fuente = horas[0].get("fuente", "Open-Meteo") if horas else "Open-Meteo"
+    st.caption(f"{lugar['nombre']} · {fuente}" + (" (sensación térmica, lluvia, viento y calidad del aire)."
+               if fuente == "Open-Meteo" else " (temperatura, lluvia y viento; sin sensación térmica ni calidad del aire)."))
 except Exception as e:
     st.caption(f"No se pudo consultar el tiempo ({type(e).__name__}).")
 

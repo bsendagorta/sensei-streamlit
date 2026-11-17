@@ -1,16 +1,23 @@
 """APIs abiertas y gratuitas (sin clave):
 
 - Open-Meteo (https://open-meteo.com): previsión horaria, calidad del aire y geocodificación.
+- MET Norway (https://api.met.no): previsión de respaldo si Open-Meteo no responde.
 - Open Food Facts (https://world.openfoodfacts.org): composición de alimentos por nombre o código de barras.
 """
 from __future__ import annotations
 
+import socket
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
+import urllib3.util.connection as _conn
+
+# En algunos servidores en la nube IPv6 cuelga las conexiones: forzamos IPv4.
+_conn.allowed_gai_family = lambda: socket.AF_INET
 
 UA = {"User-Agent": "sensei-streamlit/1.0 (preparacion pruebas fisicas; github.com/bsendagorta/sensei-streamlit)"}
-TIMEOUT = 15
+TIMEOUT = 10
 
 
 def geocodificar(nombre: str) -> list[dict]:
@@ -23,7 +30,32 @@ def geocodificar(nombre: str) -> list[dict]:
 
 
 def tiempo_horario(lat: float, lon: float) -> list[dict]:
-    """Próximas 24 h: temperatura, sensación térmica, prob. de lluvia, viento y calidad del aire."""
+    """Próximas 24 h. Open-Meteo y, si falla, MET Norway."""
+    try:
+        return _open_meteo(lat, lon)
+    except requests.RequestException:
+        return _met_norway(lat, lon)
+
+
+def _met_norway(lat: float, lon: float) -> list[dict]:
+    r = requests.get("https://api.met.no/weatherapi/locationforecast/2.0/compact",
+                     params={"lat": round(lat, 4), "lon": round(lon, 4)}, headers=UA, timeout=TIMEOUT)
+    r.raise_for_status()
+    madrid = ZoneInfo("Europe/Madrid")
+    out = []
+    for x in r.json()["properties"]["timeseries"][:24]:
+        det = x["data"]["instant"]["details"]
+        lluvia_mm = ((x["data"].get("next_1_hours") or {}).get("details") or {}).get("precipitation_amount")
+        hora = datetime.fromisoformat(x["time"].replace("Z", "+00:00")).astimezone(madrid).replace(tzinfo=None)
+        t = det.get("air_temperature")
+        out.append({"hora": hora, "temp": t, "sensacion": t,  # MET no da sensación térmica
+                    "lluvia": None if lluvia_mm is None else (80 if lluvia_mm >= 0.5 else 0),
+                    "viento": None if det.get("wind_speed") is None else det["wind_speed"] * 3.6,
+                    "aqi": None, "fuente": "MET Norway"})
+    return out
+
+
+def _open_meteo(lat: float, lon: float) -> list[dict]:
     r = requests.get("https://api.open-meteo.com/v1/forecast", params={
         "latitude": lat, "longitude": lon, "timezone": "Europe/Madrid", "forecast_hours": 24,
         "hourly": "temperature_2m,apparent_temperature,precipitation_probability,wind_speed_10m",
@@ -42,7 +74,8 @@ def tiempo_horario(lat: float, lon: float) -> list[dict]:
         pass
     return [{"hora": datetime.fromisoformat(t), "temp": h["temperature_2m"][i],
              "sensacion": h["apparent_temperature"][i], "lluvia": h["precipitation_probability"][i],
-             "viento": h["wind_speed_10m"][i], "aqi": aqi.get(t)} for i, t in enumerate(h["time"])]
+             "viento": h["wind_speed_10m"][i], "aqi": aqi.get(t), "fuente": "Open-Meteo"}
+            for i, t in enumerate(h["time"])]
 
 
 def puntuar_hora(x: dict) -> tuple[float, list[str]]:
