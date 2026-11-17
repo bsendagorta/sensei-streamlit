@@ -32,7 +32,13 @@ def _num(x):
         return None
 
 
+_OCULTOS: set = set()
+
+
 def _reemplazar(lista: list[dict], nuevos: list[dict]) -> tuple[list[dict], int]:
+    """Actualiza lo que vino de Sensei, salvo lo que hayas editado o borrado en la web."""
+    editados = {x["id"] for x in lista if x.get("id") and x.get("origen") != "sensei"}
+    nuevos = [n for n in nuevos if n["id"] not in editados and n["id"] not in _OCULTOS]
     ids = {n["id"] for n in nuevos}
     resto = [x for x in lista if x.get("id") not in ids]
     return sorted(resto + nuevos, key=lambda x: (x.get("fecha", ""), str(x.get("id")))), len(nuevos)
@@ -44,6 +50,8 @@ def importar(d: dict, copia: dict) -> dict:
         raise ErrorImportacion("No es una copia de Sensei.app (falta schema rumbo-enero-backup-v1).")
     s, base = copia["state"], copia.get("base") or {}
     resumen = {}
+    _OCULTOS.clear()
+    _OCULTOS.update(d.get("borrados_sensei", []))  # lo que borraste en la web no vuelve
 
     controles = []
     for c in s.get("controls", []):

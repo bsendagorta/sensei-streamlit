@@ -140,3 +140,20 @@ def test_almacen_local(tmp_path):
     a = AlmacenLocal(str(tmp_path / "datos.json"))
     a.modificar(lambda d: d["controles"].append({"fecha": "2026-11-01", "prueba": "banca", "resultado": 25}), "x")
     assert a.cargar()["controles"][0]["resultado"] == 25
+
+
+def test_reimportar_no_pisa_ediciones_ni_borrados():
+    from sensei.importar_sensei import importar
+    copia = {"schema": "rumbo-enero-backup-v1", "state": {"nutrition": {"weight": 92, "days": {}, "entries": [
+        {"id": "a", "date": "2026-11-17", "meal": "Cena", "name": "Tortilla", "quantity": 1, "basis": "portion",
+         "kcal": 280, "protein": 19, "carbs": 1, "fat": 22},
+        {"id": "b", "date": "2026-11-17", "meal": "Cena", "name": "Bacon", "quantity": 1, "basis": "portion",
+         "kcal": 280, "protein": 14, "carbs": 1, "fat": 25}]}}}
+    d = datos_vacios()
+    importar(d, copia)
+    t = next(c for c in d["comidas"] if c["id"] == "sensei-a")
+    t.update(nombre="Tortilla con bacon", kcal=560, origen="web")
+    d["comidas"] = [c for c in d["comidas"] if c["id"] != "sensei-b"]
+    d["borrados_sensei"] = ["sensei-b"]
+    importar(d, copia)
+    assert [c["nombre"] for c in d["comidas"]] == ["Tortilla con bacon"]

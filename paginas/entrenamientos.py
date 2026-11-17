@@ -3,6 +3,7 @@ import streamlit as st
 from sensei import ui
 from sensei.app_comun import datos, hoy
 from sensei.baremo import num
+from sensei.editor_sesion import dialogo_sesion
 
 ui.pagina("Entrenamientos", "entrenamientos")
 d, h = datos(), hoy()
@@ -15,8 +16,9 @@ c1, c2 = st.columns([4, 1.4], vertical_alignment="bottom")
 with c1:
     H('<div class="section-head"><div><h1>El orden también se entrena.</h1><p>Sesiones realizadas y futuras, con bloques '
       'y ejercicios en su secuencia.</p></div></div>')
-with c2, st.container(key="btnlink_ses"):
-    st.page_link("paginas/registrar.py", label="＋ Planificar / registrar sesión")
+with c2:
+    if st.button("＋ Planificar / registrar sesión", type="primary", use_container_width=True):
+        dialogo_sesion(None)
 
 # Une sesiones propias (con bloques) y actividades de Garmin no vinculadas
 vinculadas = {str(s.get("garmin_id")) for s in d["sesiones"] if s.get("garmin_id")}
@@ -29,7 +31,7 @@ for s in d["sesiones"]:
                   "min": s.get("duracion_min") or (g or {}).get("duracion_min"),
                   "km": s.get("distancia_km") or (g or {}).get("distancia_km"), "fc": (g or {}).get("fc_media"),
                   "carga": (g or {}).get("carga"), "rpe": s.get("rpe"), "notas": s.get("notas") or "",
-                  "bloques": s.get("bloques") or [], "origen": "propia"})
+                  "bloques": s.get("bloques") or [], "origen": "propia", "id": s.get("id")})
 for k, a in garmin.items():
     if k in vinculadas:
         continue
@@ -92,6 +94,14 @@ def tarjeta(x):
     return (f'<article class="session"><div class="session-heading"><div>{badge}<h3>{esc(x["nombre"])}</h3>'
             f'<p>{esc(" · ".join(m for m in meta if m))}</p></div></div>{notas}{bloques}</article>')
 
+
+propias = sorted(d["sesiones"], key=lambda s: s["fecha"], reverse=True)
+if propias:
+    e1, e2 = st.columns([4, 1.4], vertical_alignment="bottom")
+    j = e1.selectbox("Editar una sesión", range(len(propias)),
+                     format_func=lambda j: f'{ui.fecha_es(propias[j]["fecha"])} · {propias[j].get("nombre") or "Sesión"}')
+    if e2.button("Editar sesión", use_container_width=True):
+        dialogo_sesion(propias[j])
 
 if not items:
     H('<div class="empty-state">No hay sesiones con ese filtro.</div>')

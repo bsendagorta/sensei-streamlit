@@ -49,6 +49,45 @@ if c1.button("Recargar datos", icon="🔄", use_container_width=True):
 c2.download_button("Descargar todo (.json)", json.dumps(d, ensure_ascii=False), file_name="sensei-datos.json",
                    mime="application/json", use_container_width=True)
 
+with st.expander("Editar check-ins y citas"):
+    import pandas as pd
+    from sensei.app_comun import borrar_registros, editar_registro
+    t = st.radio("Qué editar", ["Check-ins", "Citas"], horizontal=True)
+    if t == "Check-ins":
+        regs = sorted(d["checkins"], key=lambda c: c["fecha"], reverse=True)
+        df = pd.DataFrame([{"id": c.get("id"), "fecha": c["fecha"], "sensación": c.get("sensacion"), "sueño (h)": c.get("sueno_h"),
+                            "molestias": "; ".join(f'{m["zona"]} {m["intensidad"]}' for m in c.get("molestias", [])),
+                            "notas": c.get("notas", "")} for c in regs])
+    else:
+        regs = sorted(d.get("citas", []), key=lambda c: c["fecha"], reverse=True)
+        df = pd.DataFrame([{"id": c.get("id"), "fecha": c["fecha"], "hora": c.get("hora") or "", "nombre": c.get("nombre") or "",
+                            "notas": c.get("notas") or ""} for c in regs])
+    if df.empty:
+        st.caption("Vacío.")
+    else:
+        st.caption("Edita las celdas y pulsa Guardar. Molestias: «Zona intensidad; Zona intensidad», p. ej. «Lumbar 2».")
+        ed = st.data_editor(df, hide_index=True, width="stretch", disabled=["id", "fecha"], key=f"ed_{t}")
+        if st.button("Guardar cambios", type="primary"):
+            ok = True
+            for antes, ahora in zip(df.to_dict("records"), ed.to_dict("records")):
+                if antes == ahora:
+                    continue
+                if t == "Check-ins":
+                    mol = []
+                    for trozo in str(ahora["molestias"] or "").split(";"):
+                        partes = trozo.strip().rsplit(" ", 1)
+                        if len(partes) == 2 and partes[1].isdigit():
+                            mol.append({"zona": partes[0], "intensidad": int(partes[1])})
+                    cambios = {"sensacion": ahora["sensación"], "sueno_h": ahora["sueño (h)"], "molestias": mol,
+                               "notas": ahora["notas"]}
+                    ok &= editar_registro("checkins", ahora["id"], cambios, f'Check-in {ahora["fecha"]} editado')
+                else:
+                    ok &= editar_registro("citas", ahora["id"], {"hora": ahora["hora"], "nombre": ahora["nombre"],
+                                                                 "notas": ahora["notas"]}, f'Cita {ahora["fecha"]} editada')
+            if ok:
+                st.success("Guardado.")
+                st.rerun()
+
 with st.expander("Borrar un registro"):
     tipos = {"Check-ins": "checkins", "Sesiones": "sesiones", "Citas": "citas"}
     t = st.selectbox("Tipo", list(tipos))

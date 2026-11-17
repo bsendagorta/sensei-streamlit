@@ -23,7 +23,7 @@ SCHEMA = "sensei-streamlit-v1"
 
 def datos_vacios() -> dict:
     return {"schema": SCHEMA, "ajustes": {}, "checkins": [], "sesiones": [], "controles": [],
-            "comidas": [], "dias_nutricion_completos": [], "dias_nutricion": {}, "citas": [], "aprendizaje_historial": [], "garmin_diario": [],
+            "comidas": [], "dias_nutricion_completos": [], "dias_nutricion": {}, "citas": [], "aprendizaje_historial": [], "borrados_sensei": [], "garmin_diario": [],
             "garmin_actividades": [], "garmin_ultima_sync": None}
 
 

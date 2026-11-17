@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import html as _html
 import re
-from datetime import date
+from datetime import date  # noqa: F401  (usado por las páginas como ui.date)
 from functools import lru_cache
 from pathlib import Path
 

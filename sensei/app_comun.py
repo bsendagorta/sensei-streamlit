@@ -301,3 +301,23 @@ def evaluacion_y_recomendacion() -> tuple[dict, dict]:
     ev = evaluar_hoy(d, h, R["modelos"], a["peso_kg"], nut)
     rec = recomendar_manana(d, h, R["modelos"], a, R.get("recuperacion"), fecha_examen())
     return ev, rec
+
+
+# ---------------- Edición genérica (cualquier registro) ----------------
+
+def editar_registro(clave: str, rid: str, cambios: dict, mensaje: str) -> bool:
+    """Cambia campos de un registro. Lo que venía de Sensei pasa a ser tuyo y la reimportación ya no lo pisa."""
+    def cambio(x):
+        for r in x.get(clave, []):
+            if r.get("id") == rid:
+                r.update(cambios)
+                if r.get("origen") == "sensei":
+                    r["origen"] = "web"
+    return guardar(cambio, mensaje)
+
+
+def borrar_registros(clave: str, ids: list[str], mensaje: str) -> bool:
+    def cambio(x):
+        x[clave] = [r for r in x.get(clave, []) if r.get("id") not in ids]
+        x.setdefault("borrados_sensei", []).extend(i for i in ids if str(i).startswith("sensei-"))
+    return guardar(cambio, mensaje)
