@@ -18,6 +18,7 @@ import requests
 BASE = "https://personal.connectapi.garmin.com"
 URL_TOKEN = BASE + "/personalapitoken-service/personal-api/personal-api-key/token"
 TROZO_DIAS = 28  # rangos cortos para no chocar con límites no documentados
+_post = requests.post  # sustituible en tests
 
 
 class ErrorGarminPersonal(RuntimeError):
@@ -49,7 +50,11 @@ def _extraer_token(r: requests.Response) -> tuple[str, float]:
 
 class ClientePersonal:
     def __init__(self, api_key: str):
-        self.api_key = api_key.strip().strip("'\"")
+        k = api_key.strip().strip("'\"").strip()
+        if k.lower().startswith("apikey "):
+            k = k[7:].strip()
+        self.api_key = k
+        self.variante = None
         self._token, self._caduca = None, 0.0
         self.s = requests.Session()
         self.s.headers.update({"Accept": "*/*", "User-Agent": "sensei-streamlit/1.0"})
@@ -57,14 +62,33 @@ class ClientePersonal:
     def _asegurar_token(self):
         if self._token and time.time() < self._caduca:
             return
-        r = self.s.post(URL_TOKEN, headers={"Authorization": f"ApiKey {self.api_key}"}, timeout=20)
-        if r.status_code in (401, 403):
-            raise ErrorGarminPersonal("Garmin rechaza la clave API personal: puede haber caducado o haberse "
-                                      "eliminado. Crea otra en Garmin Connect y pégala en los secretos.")
-        if r.status_code >= 400:
-            detalle = (r.text or "")[:160].replace(self.api_key, "***")
-            raise ErrorGarminPersonal(f"Garmin no dio el token (HTTP {r.status_code}). {detalle}")
-        self._token, self._caduca = _extraer_token(r)
+        # Garmin solo documenta el ejemplo con curl; probamos variantes de cabeceras hasta que acepte.
+        auth = {"Authorization": f"ApiKey {self.api_key}"}
+        variantes = [
+            ("curl", {**auth, "Accept": "*/*", "User-Agent": "curl/8.7.1"}, None),
+            ("json", {**auth, "Accept": "application/json", "Content-Type": "application/json"}, "{}"),
+            ("texto", {**auth, "Accept": "text/plain, */*"}, None),
+            ("form", {**auth, "Accept": "*/*", "Content-Type": "application/x-www-form-urlencoded"}, ""),
+        ]
+        estados = []
+        for nombre, cab, cuerpo in variantes:
+            try:
+                r = _post(URL_TOKEN, headers=cab, data=cuerpo, timeout=20)
+            except requests.RequestException as e:
+                estados.append(f"{nombre}:{type(e).__name__}")
+                continue
+            if r.status_code < 400:
+                self._token, self._caduca = _extraer_token(r)
+                self.variante = nombre
+                return
+            estados.append(f"{nombre}:{r.status_code}")
+            if r.status_code in (401, 403):
+                raise ErrorGarminPersonal("Garmin rechaza la clave API personal: puede haber caducado o haberse "
+                                          "eliminado. Crea otra en Garmin Connect y pégala en los secretos.")
+        k = self.api_key
+        forma = (f"clave de {len(k)} caracteres; espacios={' ' in k}, saltos={chr(10) in k}, "
+                 f"empieza_por_ApiKey={k.lower().startswith('apikey')}")
+        raise ErrorGarminPersonal(f"Garmin no dio el token ({', '.join(estados)}; {forma}).")
 
     def get(self, ruta: str, params: dict | None = None):
         self._asegurar_token()

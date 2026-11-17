@@ -21,8 +21,8 @@ class SesionFalsa:
     def __init__(self, token_resp):
         self.headers, self.token_resp, self.llamadas = {}, token_resp, []
 
-    def post(self, url, headers=None, timeout=None):
-        assert headers["Authorization"].startswith("ApiKey ")
+    def post(self, url, headers=None, timeout=None, data=None):
+        assert headers["Authorization"] == "ApiKey clave"
         return self.token_resp
 
     def get(self, url, params=None, timeout=None, headers=None):
@@ -45,8 +45,9 @@ class SesionFalsa:
 
 
 def _cliente(token_resp):
-    c = gp.ClientePersonal("'clave'")
+    c = gp.ClientePersonal("'ApiKey clave'")
     c.s = SesionFalsa(token_resp)
+    gp._post = c.s.post
     return c
 
 
@@ -63,7 +64,7 @@ def test_token_formatos(resp):
 
 def test_clave_rechazada():
     c = _cliente(Resp(status=401, data={}))
-    with pytest.raises(gp.ErrorGarminPersonal):
+    with pytest.raises(gp.ErrorGarminPersonal, match="rechaza"):
         c.get("/x")
 
 
@@ -78,3 +79,17 @@ def test_es_clave_personal():
     assert gp.es_clave_personal("abc-123.def")
     assert not gp.es_clave_personal('{"di_token": "x"}')
     assert not gp.es_clave_personal(None)
+
+
+def test_prueba_variantes_hasta_que_acepta():
+    c = _cliente(Resp(data={"access_token": "TOK"}))
+    respuestas = iter([Resp(status=406, data={}), Resp(status=406, data={}), Resp(data={"access_token": "TOK"})])
+    gp._post = lambda *a, **k: next(respuestas)
+    c.get("/usersummary-service/v2/dailysummaries")
+    assert c.variante == "texto"
+
+
+def test_406_en_todas_explica():
+    c = _cliente(Resp(status=406, data={}))
+    with pytest.raises(gp.ErrorGarminPersonal, match="curl:406.*clave de 5 caracteres"):
+        c.get("/x")
