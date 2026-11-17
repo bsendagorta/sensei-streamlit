@@ -52,7 +52,7 @@ class ClientePersonal:
         self.api_key = api_key.strip().strip("'\"")
         self._token, self._caduca = None, 0.0
         self.s = requests.Session()
-        self.s.headers.update({"Accept": "application/json", "User-Agent": "sensei-streamlit/1.0"})
+        self.s.headers.update({"Accept": "*/*", "User-Agent": "sensei-streamlit/1.0"})
 
     def _asegurar_token(self):
         if self._token and time.time() < self._caduca:
@@ -62,7 +62,8 @@ class ClientePersonal:
             raise ErrorGarminPersonal("Garmin rechaza la clave API personal: puede haber caducado o haberse "
                                       "eliminado. Crea otra en Garmin Connect y pégala en los secretos.")
         if r.status_code >= 400:
-            raise ErrorGarminPersonal(f"Garmin no dio el token (HTTP {r.status_code}).")
+            detalle = (r.text or "")[:160].replace(self.api_key, "***")
+            raise ErrorGarminPersonal(f"Garmin no dio el token (HTTP {r.status_code}). {detalle}")
         self._token, self._caduca = _extraer_token(r)
 
     def get(self, ruta: str, params: dict | None = None):
