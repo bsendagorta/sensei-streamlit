@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import streamlit as st
 
 from . import garmin as gm
+from . import garmin_personal as gp
 from .almacen import AlmacenGitHub, AlmacenLocal, ErrorAlmacen
 from .reglas import UMBRALES_POR_DEFECTO
 
@@ -111,7 +112,38 @@ def fecha_examen() -> date:
 # ---------------- Garmin ----------------
 
 def garmin_configurado() -> bool:
-    return bool(_secreto("garmin", "token"))
+    return bool(_secreto("garmin", "api_key") or _secreto("garmin", "token"))
+
+
+def _clave_personal() -> str | None:
+    """Clave API personal oficial: `[garmin] api_key`, o `token` si lo pegado no es JSON."""
+    k = _secreto("garmin", "api_key")
+    if k:
+        return str(k)
+    t = _secreto("garmin", "token")
+    return str(t) if gp.es_clave_personal(t) else None
+
+
+@st.cache_resource
+def _cliente_personal(clave: str):
+    return gp.ClientePersonal(clave)
+
+
+def _descargar(desde: date, hasta: date):
+    """(diarios, actividades, api_antigua_o_None) por la vía que esté configurada."""
+    clave = _clave_personal()
+    if clave:
+        try:
+            d, a = gp.descargar_rango(_cliente_personal(clave), desde, hasta)
+        except gp.ErrorGarminPersonal as e:
+            raise gm.ErrorGarmin(str(e)) from e
+        return d, a, None, None
+    token = _token_garmin()
+    if not token:
+        raise gm.ErrorGarmin("Garmin no está configurado (falta `[garmin] api_key` en los secretos).")
+    api = gm.conectar(token)
+    d, a = gm.descargar_rango(api, desde, hasta)
+    return d, a, api, token
 
 
 def _token_garmin() -> str | None:
@@ -126,9 +158,8 @@ def _token_garmin() -> str | None:
 
 def sincronizar_garmin(dias: int | None = None) -> str:
     """Descarga de Garmin y añade a tus datos. Devuelve un mensaje para mostrar."""
-    token = _token_garmin()
-    if not token:
-        return "Garmin no está configurado (falta `[garmin] token` en los secretos)."
+    if not garmin_configurado():
+        return "Garmin no está configurado (falta `[garmin] api_key` en los secretos)."
     d = datos()
     if dias is None:
         ultima = d.get("garmin_ultima_sync")
@@ -136,12 +167,11 @@ def sincronizar_garmin(dias: int | None = None) -> str:
             dias = min(30, max(3, (ahora() - datetime.fromisoformat(ultima)).days + 2))
         else:
             dias = 30
-    api = gm.conectar(token)
-    diarios, acts = gm.descargar(api, dias, hoy())
+    diarios, acts, api, token = _descargar(hoy() - timedelta(days=dias - 1), hoy())
     marca = ahora().isoformat(timespec="seconds")
     if not guardar(lambda x: gm.fusionar(x, diarios, acts, marca), f"Garmin: {dias} días"):
         return "Se descargó de Garmin pero no se pudo guardar."
-    nuevo = gm.token_actual(api)
+    nuevo = gm.token_actual(api) if api else None
     if nuevo and nuevo != token and _secreto("garmin", "guardar_token_renovado", True):
         try:
             almacen().escribir_archivo(gm.RUTA_TOKEN, nuevo, "Garmin: token renovado")
@@ -151,16 +181,15 @@ def sincronizar_garmin(dias: int | None = None) -> str:
     return f"Garmin actualizado: {con_datos} días con datos de recuperación y {len(acts)} actividades."
 
 
-def importar_historial(bloque: int = 45) -> str:
+def importar_historial(bloque: int | None = None) -> str:
     """Trae días más antiguos de Garmin, por bloques, para que el aprendizaje tenga historia."""
-    token = _token_garmin()
-    if not token:
+    if not garmin_configurado():
         return "Garmin no está configurado."
+    bloque = bloque or (120 if _clave_personal() else 45)
     fechas = [g["fecha"] for g in datos()["garmin_diario"]]
     hasta = (date.fromisoformat(min(fechas)) if fechas else hoy()) - timedelta(days=1)
     desde = hasta - timedelta(days=bloque - 1)
-    api = gm.conectar(token)
-    diarios, acts = gm.descargar_rango(api, desde, hasta)
+    diarios, acts, _, _ = _descargar(desde, hasta)
     ultima = datos().get("garmin_ultima_sync") or ahora().isoformat(timespec="seconds")
     if not guardar(lambda x: gm.fusionar(x, diarios, acts, ultima), f"Garmin: historial {desde}–{hasta}"):
         return "No se pudo guardar."

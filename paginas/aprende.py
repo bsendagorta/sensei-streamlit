@@ -19,8 +19,8 @@ c2.metric("Check-ins", len(d["checkins"]))
 c3.metric("Controles", len(d["controles"]))
 
 if garmin_configurado():
-    if st.button("Traer 45 días más antiguos de Garmin", icon="⬇️",
-                 help="Cuanta más historia, mejor aprende. Repite hasta cubrir el tiempo que quieras."):
+    if st.button("Traer más historial de Garmin", icon="⬇️",
+                 help="Trae el bloque anterior a lo que ya tienes (120 días con la clave API personal). Repite hasta cubrir el tiempo que quieras."):
         with st.spinner("Descargando historial (puede tardar 1–2 min)…"):
             try:
                 st.success(importar_historial())

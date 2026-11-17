@@ -22,7 +22,6 @@ mejora solo se da por demostrada cuando el intervalo de confianza del 95 % exclu
 |---|---|---|
 | Código de la app | este repositorio | Sí |
 | Tus registros y lo que baja de Garmin | `datos.json` en tu repo **privado** `sensei-datos` | No |
-| Token de Garmin renovado | `privado/garmin_token.json` en `sensei-datos` | No |
 | Contraseñas y tokens | Secretos de Streamlit Cloud | No |
 
 Cada cambio que haces en la app es un commit en `sensei-datos`: el historial completo queda en git.
@@ -31,7 +30,7 @@ Cada cambio que haces en la app es un commit en `sensei-datos`: el historial com
 
 | API | Para qué | Clave |
 |---|---|---|
-| Garmin Connect (librería [`garminconnect`](https://github.com/cyberjunky/python-garminconnect), no oficial) | Recuperación diaria y actividades. **Solo lectura** | Tu token |
+| [Garmin Connect Personal API](https://developer.garmin.com/gc-developer-program/personal/personal-api/) (oficial) | Pulso en reposo, VFC, sueño, estrés, Body Battery y actividades con su carga. **Solo lectura** | Tu clave API personal |
 | [Open-Meteo](https://open-meteo.com) | Sensación térmica, lluvia, viento y calidad del aire por horas; búsqueda de municipios | No |
 | [Open Food Facts](https://world.openfoodfacts.org) | Proteína y kcal de alimentos por nombre o código de barras | No |
 | GitHub | Guardar tus datos en el repo privado | Token de grano fino |
@@ -40,14 +39,9 @@ Cada cambio que haces en la app es un commit en `sensei-datos`: el historial com
 
 1. **Token de GitHub** — github.com → Settings → Developer settings → *Fine-grained tokens* → Generate:
    *Only select repositories* → `sensei-datos`; *Repository permissions* → **Contents: Read and write**.
-2. **Token de Garmin** — en la Terminal de tu Mac:
-   ```bash
-   git clone https://github.com/bsendagorta/sensei-streamlit.git && cd sensei-streamlit
-   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-   .venv/bin/python herramientas/exportar_token_garmin.py
-   ```
-   Escribes correo, contraseña y 2FA **en la Terminal**; la contraseña no se guarda. El token queda en el
-   portapapeles.
+2. **Clave API personal de Garmin** — Garmin Connect web → Ajustes → *Clave API personal* → *Crear clave*
+   (elige 1 año). Cópiala en el momento: Garmin solo la enseña una vez. La app la cambia por un token de 24 h
+   cada día; no da acceso a escribir nada en tu cuenta.
 3. **Desplegar** — [share.streamlit.io](https://share.streamlit.io) → *Create app* → repo
    `bsendagorta/sensei-streamlit`, rama `main`, archivo `streamlit_app.py` → *Advanced settings* → *Secrets*:
    pega el contenido de [`.streamlit/secrets.toml.ejemplo`](.streamlit/secrets.toml.ejemplo) con tus valores.
@@ -58,11 +52,13 @@ Cada cambio que haces en la app es un commit en `sensei-datos`: el historial com
 Para que Garmin se descargue aunque no abras la app, copia
 [`herramientas/plantilla-repo-datos/.github/workflows/garmin.yml`](herramientas/plantilla-repo-datos/.github/workflows/garmin.yml)
 al repo privado `sensei-datos` y añade allí dos secretos de Actions: `DATOS_TOKEN` (el token de GitHub) y
-`GARMIN_TOKEN` (el de Garmin).
+`GARMIN_API_KEY` (la clave API personal).
 
 ## Si algo falla
-- **«No se pudo entrar en Garmin»**: repite el paso 2 y sustituye `[garmin] token` en los secretos.
-  Garmin a veces bloquea servidores en la nube; mientras tanto, registra a mano: el semáforo funciona igual.
+- **«Garmin rechaza la clave API personal»**: caducó o la eliminaste. Crea otra y sustituye `[garmin] api_key`.
+- La API personal no incluye *Training Readiness*; el resto de señales del semáforo sí.
+- Alternativa no oficial (por si la necesitas): `herramientas/exportar_token_garmin.py` genera un token para la
+  librería `garminconnect`; pégalo como `[garmin] token`.
 - **«GitHub rechaza el token»**: el token caducó o no tiene *Contents: Read and write* en `sensei-datos`.
 
 ## Desarrollo
