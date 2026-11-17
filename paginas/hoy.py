@@ -2,8 +2,10 @@ import streamlit as st
 
 from sensei import apis
 from sensei import garmin as gm
-from sensei.app_comun import (ESTADO, ajustes, autosincronizar, datos, fecha_examen, garmin_configurado,
+from sensei.app_comun import (ESTADO, ahora, ajustes, autosincronizar, datos, fecha_examen, garmin_configurado,
                               hoy, sincronizar_garmin)
+
+DIAS = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
 from sensei.reglas import NOMBRE_NIVEL, evaluar, fase
 
 autosincronizar()
@@ -49,11 +51,12 @@ def _tiempo(lat, lon):
 
 try:
     horas = _tiempo(lugar["lat"], lugar["lon"])
-    mejores = apis.mejores_horas(horas)
+    hora_actual = ahora().replace(tzinfo=None, minute=0, second=0, microsecond=0)
+    mejores = apis.mejores_horas([x for x in horas if x["hora"] > hora_actual])
     cols = st.columns(len(mejores) or 1)
     for col, x in zip(cols, mejores):
         with col:
-            st.metric(x["hora"].strftime("%a %H:%M"), f"{x['sensacion']:.0f} °C",
+            st.metric(f"{DIAS[x['hora'].weekday()]} {x['hora']:%H:%M}", f"{x['sensacion']:.0f} °C",
                       help=f"Temperatura {x['temp']:.0f} °C · lluvia {x['lluvia'] if x['lluvia'] is not None else '—'} % · "
                            f"viento {x['viento'] or 0:.0f} km/h"
                            + (f" · ICA {x['aqi']:.0f}" if x.get("aqi") is not None else ""))
