@@ -28,7 +28,7 @@ if garmin_configurado():
             except gm.ErrorGarmin as e:
                 st.error(str(e))
             except Exception as e:
-                st.error(f"Garmin no responde ({type(e).__name__}). Prueba más tarde.")
+                st.error(f"Garmin no responde ({type(e).__name__}: {e}). Prueba más tarde.")
 
 # 1. Puntos débiles
 st.header("1 · Puntos débiles y margen de mejora")

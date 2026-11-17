@@ -87,6 +87,6 @@ if garmin_configurado():
             except gm.ErrorGarmin as e:
                 st.error(str(e))
             except Exception as e:
-                st.error(f"Garmin no responde ({type(e).__name__}). Registra a mano y prueba más tarde.")
+                st.error(f"Garmin no responde ({type(e).__name__}: {e}). Registra a mano y prueba más tarde.")
 else:
     st.caption("Garmin no está conectado: crea una clave API personal en Garmin Connect y pégala en los secretos como `[garmin] api_key`.")

@@ -178,7 +178,8 @@ def sincronizar_garmin(dias: int | None = None) -> str:
         except Exception:
             pass
     con_datos = sum(1 for x in diarios if x.get("fc_reposo") or x.get("vfc") or x.get("sueno_h"))
-    return f"Garmin actualizado: {con_datos} días con datos de recuperación y {len(acts)} actividades."
+    aviso = (" Avisos: " + " | ".join(dict.fromkeys(gp.ERRORES))[:300]) if gp.ERRORES else ""
+    return f"Garmin actualizado: {con_datos} días con datos de recuperación y {len(acts)} actividades.{aviso}"
 
 
 def importar_historial(bloque: int | None = None) -> str:
@@ -211,7 +212,7 @@ def autosincronizar() -> None:
         except gm.ErrorGarmin as e:
             st.warning(str(e))
         except Exception as e:
-            st.warning(f"Garmin no responde ahora ({type(e).__name__}). Puedes registrar a mano.")
+            st.warning(f"Garmin no responde ahora ({type(e).__name__}: {e}). Puedes registrar a mano.")
 
 
 def estilo_grafico(fig, titulo_y: str = ""):

@@ -78,8 +78,11 @@ class ClientePersonal:
         if r.status_code == 204 or not r.content:
             return None
         if r.status_code >= 400:
-            raise ErrorGarminPersonal(f"{ruta}: HTTP {r.status_code}")
-        return r.json()
+            raise ErrorGarminPersonal(f"{ruta.split('/')[1]}: HTTP {r.status_code} {(r.text or '')[:120]}")
+        try:
+            return r.json()
+        except ValueError as e:
+            raise ErrorGarminPersonal(f"{ruta.split('/')[1]}: respuesta no JSON ({r.headers.get('content-type')})") from e
 
 
 def _num(x):
@@ -97,11 +100,19 @@ def _trozos(desde: date, hasta: date):
         a = b + timedelta(days=1)
 
 
+ERRORES: list[str] = []
+
+
 def _seguro(f, *a, **k):
     try:
         return f(*a, **k)
-    except (ErrorGarminPersonal, requests.RequestException, ValueError):
-        return None
+    except ErrorGarminPersonal as e:
+        if "token" in str(e).lower() or "clave" in str(e).lower():
+            raise  # sin token no tiene sentido seguir
+        ERRORES.append(str(e))
+    except (requests.RequestException, ValueError) as e:
+        ERRORES.append(f"{type(e).__name__}")
+    return None
 
 
 def diarios(cli: ClientePersonal, desde: date, hasta: date) -> list[dict]:
@@ -166,7 +177,13 @@ def actividades(cli: ClientePersonal, desde: date, hasta: date) -> list[dict]:
 
 
 def descargar_rango(cli: ClientePersonal, desde: date, hasta: date) -> tuple[list[dict], list[dict]]:
-    return diarios(cli, desde, hasta), actividades(cli, desde, hasta)
+    ERRORES.clear()
+    d = diarios(cli, desde, hasta)
+    a = _seguro(actividades, cli, desde, hasta) or []
+    con_datos = [x for x in d if any(x[k] is not None for k in ("fc_reposo", "vfc", "sueno_h"))]
+    if not con_datos and not a and ERRORES:
+        raise ErrorGarminPersonal("Garmin respondió con errores: " + " | ".join(dict.fromkeys(ERRORES))[:400])
+    return d, a
 
 
 def probar(cli: ClientePersonal) -> str:
