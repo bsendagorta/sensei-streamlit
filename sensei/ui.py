@@ -19,6 +19,7 @@ PREFIJO = "div.sensei"
 
 PAGINAS = [  # (archivo, título, slug)
     ("paginas/prevision.py", "Mi previsión", "prevision"),
+    ("paginas/conoce.py", "Sensei te conoce", "conoce"),
     ("paginas/entrenamientos.py", "Entrenamientos", "entrenamientos"),
     ("paginas/controles.py", "Controles", "controles"),
     ("paginas/rendimiento.py", "Rendimiento", "rendimiento"),
