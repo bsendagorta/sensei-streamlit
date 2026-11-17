@@ -124,8 +124,8 @@ def _clave_personal() -> str | None:
     return str(t) if gp.es_clave_personal(t) else None
 
 
-@st.cache_resource
 def _cliente_personal(clave: str):
+    # Sin caché: un objeto cacheado sobrevive a los redespliegues con el código viejo.
     return gp.ClientePersonal(clave)
 
 
