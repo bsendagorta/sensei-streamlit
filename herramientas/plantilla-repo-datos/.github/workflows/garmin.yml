@@ -1,0 +1,25 @@
+# Va en el repo PRIVADO sensei-datos. Descarga Garmin cada mañana aunque no abras la app.
+name: Garmin diario
+on:
+  schedule:
+    - cron: "17 6 * * *"   # 07:17 hora de Madrid en invierno
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: bsendagorta/sensei-streamlit
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python herramientas/sync_garmin.py
+        env:
+          GITHUB_DATOS_TOKEN: ${{ secrets.DATOS_TOKEN }}
+          GITHUB_DATOS_REPO: ${{ github.repository }}
+          GARMIN_TOKEN: ${{ secrets.GARMIN_TOKEN }}
+          DIAS: "3"
