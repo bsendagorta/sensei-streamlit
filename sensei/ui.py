@@ -93,8 +93,9 @@ html,body,[data-testid="stApp"],[data-testid="stMain"]{background:#f4f5f2!import
  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 [data-testid="stApp"] :is(p,div,label,input,button,h1,h2,h3,li,td,th,textarea,small,strong,a):not([data-testid="stIconMaterial"]){font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 [data-testid="stHeader"]{background:transparent}
-[data-testid="stToolbar"],[data-testid="stDecoration"],[data-testid="stSidebarNav"],
-[data-testid="stHeaderActionElements"],.stDeployButton{display:none!important}
+[data-testid="stDecoration"],[data-testid="stSidebarNav"],[data-testid="stToolbarActions"],[data-testid="stMainMenu"],
+[data-testid="stAppDeployButton"],[data-testid="stHeaderActionElements"],.stDeployButton{display:none!important}
+[data-testid="stToolbar"]{background:transparent}
 [data-testid="stMainBlockContainer"]{max-width:1550px;padding:27px 34px 40px}
 @media(max-width:850px){[data-testid="stMainBlockContainer"]{padding:56px 15px 30px}}
 div.sensei{font-size:15px;color:#203239;background:transparent!important}
@@ -116,8 +117,13 @@ div.sensei a.anchor-link{display:none}
 [data-testid="stSidebar"] [class*="st-key-navsel_"] p{color:#d8eca3!important}
 [data-testid="stSidebar"] [class*="st-key-navx"] p{font-size:12px!important;color:#adc0b4!important}
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:4px}
-[data-testid="stSidebarCollapseButton"] svg,[data-testid="stSidebarCollapsedControl"] svg{color:#c3d0c7}
-[data-testid="stExpandSidebarButton"],[data-testid="stSidebarCollapsedControl"] button{background:#172e35;color:#fff;border-radius:9px}
+[data-testid="stSidebarCollapseButton"]{visibility:visible!important}
+[data-testid="stSidebarCollapseButton"] button{background:#ffffff14;border-radius:9px}
+[data-testid="stSidebarCollapseButton"] *{color:#e8eee7!important}
+[data-testid="stExpandSidebarButton"]{background:#172e35!important;color:#e8eee7!important;border-radius:11px!important;
+  padding:6px 13px 6px 9px!important;height:auto!important;width:auto!important;box-shadow:0 4px 14px #0f1f2433;gap:6px;display:inline-flex!important;align-items:center}
+[data-testid="stExpandSidebarButton"] *{color:#e8eee7!important}
+[data-testid="stExpandSidebarButton"]::after{content:"Menú";font:600 13px/1 Inter,system-ui,sans-serif;color:#e8eee7}
 /* Botones */
 [data-testid="stBaseButton-secondary"],[data-testid="stBaseButton-secondaryFormSubmit"],[data-testid="stDownloadButton"] button{
  background:#fff;border:1px solid #dce4dc;border-radius:9px;color:#203239;min-height:40px}
@@ -278,6 +284,19 @@ ICONO_JS = """
     });
   }
   poner(document);
+  // En el móvil, al elegir una pestaña del menú lateral, se cierra solo para ver la página.
+  if (!window.__senseiMenu) {
+    window.__senseiMenu = true;
+    document.addEventListener('click', function (ev) {
+      if (window.innerWidth > 768) return;
+      var a = ev.target.closest && ev.target.closest('[data-testid="stSidebar"] [data-testid="stPageLink"] a');
+      if (!a) return;
+      setTimeout(function () {
+        var b = document.querySelector('[data-testid="stSidebarCollapseButton"] button');
+        if (b) b.click();
+      }, 150);
+    }, true);
+  }
   try { if (window.parent && window.parent !== window) poner(window.parent.document); } catch (e) {}
   try { if (window.top && window.top !== window) poner(window.top.document); } catch (e) {}
 })();

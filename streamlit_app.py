@@ -3,7 +3,7 @@ import streamlit as st
 from sensei.app_comun import exigir_acceso
 from sensei.ui import PAGINAS, PAGINAS_EXTRA, icono_web
 
-st.set_page_config(page_title="Sensei", page_icon="static/sensei-64.png", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Sensei", page_icon="static/sensei-64.png", layout="wide", initial_sidebar_state="auto")
 icono_web()
 exigir_acceso()
 
