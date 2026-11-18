@@ -36,7 +36,9 @@ _OCULTOS: set = set()
 
 
 def _reemplazar(lista: list[dict], nuevos: list[dict]) -> tuple[list[dict], int]:
-    """Actualiza lo que vino de Sensei, salvo lo que hayas editado o borrado en la web."""
+    """Actualiza lo que vino de Sensei, salvo lo que hayas editado o borrado en la web.
+    Los registros de Sensei con id «web-…» nacieron en la web (los trajo la sincronización): no se duplican."""
+    nuevos = [n for n in nuevos if not str(n["id"]).startswith("sensei-web-")]
     editados = {x["id"] for x in lista if x.get("id") and x.get("origen") != "sensei"}
     nuevos = [n for n in nuevos if n["id"] not in editados and n["id"] not in _OCULTOS]
     ids = {n["id"] for n in nuevos}

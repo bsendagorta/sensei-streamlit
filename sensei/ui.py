@@ -249,3 +249,42 @@ def pie() -> None:
                + (f" · última actividad {fecha_es(max(acts))}" if acts else "")) if ultima else "Garmin: sin descargar"
     html(f'<div class="footer"><span>Guardado en tu repositorio privado</span><span>{esc(texto_g)}</span>'
          f'<span>Sensei · datos y planificación personales</span></div>')
+
+
+ICONO_JS = """
+<script>
+(function () {
+  // En Streamlit Cloud la app vive en /~/+/ y los estáticos en /~/+/app/static/; en local, en /app/static/.
+  var base = location.origin + (location.pathname.indexOf('/~/+') === 0 ? '/~/+/app/static/' : '/app/static/');
+  function poner(doc) {
+    if (!doc || !doc.head || doc.getElementById('sensei-icono')) return;
+    var etiquetas = [
+      ['link', {id: 'sensei-icono', rel: 'apple-touch-icon', sizes: '180x180', href: base + 'sensei-180.png'}],
+      ['link', {rel: 'icon', type: 'image/png', sizes: '192x192', href: base + 'sensei-192.png'}],
+      ['link', {rel: 'manifest', href: base + 'manifest.json'}],
+      ['meta', {name: 'apple-mobile-web-app-title', content: 'Sensei'}],
+      ['meta', {name: 'application-name', content: 'Sensei'}],
+      ['meta', {name: 'apple-mobile-web-app-capable', content: 'yes'}],
+      ['meta', {name: 'mobile-web-app-capable', content: 'yes'}],
+      ['meta', {name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent'}],
+      ['meta', {name: 'theme-color', content: '#172e35'}]
+    ];
+    doc.querySelectorAll('link[rel="apple-touch-icon"],link[rel="manifest"],meta[name="apple-mobile-web-app-title"]')
+       .forEach(function (n) { n.remove(); });
+    etiquetas.forEach(function (e) {
+      var n = doc.createElement(e[0]);
+      Object.keys(e[1]).forEach(function (k) { n.setAttribute(k, e[1][k]); });
+      doc.head.appendChild(n);
+    });
+  }
+  poner(document);
+  try { if (window.parent && window.parent !== window) poner(window.parent.document); } catch (e) {}
+  try { if (window.top && window.top !== window) poner(window.top.document); } catch (e) {}
+})();
+</script>
+"""
+
+
+def icono_web() -> None:
+    """Icono de Sensei.app en el móvil (Añadir a pantalla de inicio) y en la pestaña del navegador."""
+    st.html(ICONO_JS, unsafe_allow_javascript=True)
